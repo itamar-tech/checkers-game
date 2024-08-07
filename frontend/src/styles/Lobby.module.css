@@ -1,0 +1,115 @@
+.lobby {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-image: url('/images/lobby-background.png');
+  background-size: cover;
+  color: white;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5); /* Cor de fundo com opacidade para o cabeçalho */
+}
+
+.logo {
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.userInfo {
+  flex: 1;
+  margin: 0 10px;
+}
+
+.userInfo p {
+  margin: 0;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+}
+
+.friendsList, .chat {
+  background: rgba(0, 0, 0, 0.5); /* Fundo com opacidade */
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
+.friendsList h3, .chat h2 {
+  margin: 0 0 10px 0;
+}
+
+.friendsList ul {
+  list-style: none;
+  padding: 0;
+}
+
+.friendsList li {
+  margin: 5px 0;
+}
+
+.chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.inputText {
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.sendButton {
+  padding: 10px;
+  background: #00bfff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: white;
+}
+
+.gameOptions {
+  display: flex;
+  gap: 20px;
+}
+
+.gameButton {
+  padding: 20px 40px;
+  font-size: 1.2em;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.gameButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.playNow {
+  background: green;
+  color: white;
+}

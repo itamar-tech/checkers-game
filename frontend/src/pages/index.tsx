@@ -1,25 +1,34 @@
 import React, { useState } from 'react';
-import PlayerSetup from '../components/PlayerSetup';
+import Login from '../components/Login';
 import Game from '../components/Game';
+import Lobby from '../components/Lobby';
 import styles from '../styles/Home.module.css';
 
 const Home: React.FC = () => {
-  const [started, setStarted] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [inLobby, setInLobby] = useState(false);
   const [player, setPlayer] = useState<string | null>(null);
 
-  const handleStart = (player: string) => {
-    console.log('handleStart called with:', player);
-    setPlayer(player);
-    setStarted(true);
+  const handleLogin = (username: string) => {
+    console.log('handleLogin called with:', username);
+    setPlayer(username);
+    setIsLoggedIn(true);
+    setInLobby(true);
   };
 
-  console.log('Home component rendered. Started:', started, 'Player:', player, 'handleStart:', handleStart);
+  const handleStartGame = () => {
+    console.log('handleStartGame called');
+    setInLobby(false);
+  };
+
+  console.log('Home component rendered. IsLoggedIn:', isLoggedIn, 'InLobby:', inLobby, 'Player:', player);
 
   return (
     <div className={styles.container}>
-      <h1>Jogo de Damas</h1>
-      {!started ? (
-        <PlayerSetup onStart={handleStart} />
+      {!isLoggedIn ? (
+        <Login onLogin={handleLogin} />
+      ) : inLobby ? (
+        <Lobby player={player} onStartGame={handleStartGame} />
       ) : (
         <Game player={player} />
       )}
