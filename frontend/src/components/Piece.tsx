@@ -8,7 +8,7 @@ interface PieceProps {
 
 const Piece: React.FC<PieceProps> = ({ isKing, isBlack }) => {
   return (
-    <div className={`${styles.piece} ${isBlack ? styles.black : styles.red}`}>
+    <div className={`${styles.piece} ${isBlack ? styles.blue : styles.red}`}>
       {isKing && <span className={styles.king}>♛</span>}
     </div>
   );

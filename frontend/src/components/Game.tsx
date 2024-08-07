@@ -25,9 +25,11 @@ const Game: React.FC<GameProps> = ({ player }) => {
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [turn, setTurn] = useState<number>(1); // 1 or 2, representing the player turn
   const [capturedPieces, setCapturedPieces] = useState<{ [key: string]: number }>({ red: 0, blue: 0 });
+  const [possibleCaptures, setPossibleCaptures] = useState<[number, number][]>([]);
+
   useEffect(() => {
     if (!player) return;
-    const socket = new WebSocket('ws://192.168.0.6:8080'); // Use o IP da sua máquina
+    const socket = new WebSocket('ws://45.137.192.184:8080'); // Use o IP da sua máquina
     socket.onopen = () => {
       const id = localStorage.getItem('playerId') || Math.random().toString(36).substring(2);
       localStorage.setItem('playerId', id);
@@ -82,17 +84,50 @@ const Game: React.FC<GameProps> = ({ player }) => {
       [2, 2], [2, -2], [-2, 2], [-2, -2]
     ];
     const captures = [];
-
+  
     for (const [dx, dy] of directions) {
       const to: [number, number] = [from[0] + dx, from[1] + dy];
-      const midX = (from[0] + to[0]) / 2;
-      const midY = (from[1] + to[1]) / 2;
-
-      if (to[0] >= 0 && to[0] < 8 && to[1] >= 0 && to[1] < 8 && board[to[0]][to[1]] === 0 && board[midX][midY] * piece < 0) {
+      const midX = from[0] + dx / 2;
+      const midY = from[1] + dy / 2;
+  
+      if (
+        to[0] >= 0 && to[0] < 8 &&
+        to[1] >= 0 && to[1] < 8 &&
+        board[to[0]][to[1]] === 0 &&
+        board[midX][midY] * piece < 0
+      ) {
         captures.push(to);
       }
     }
+  
+    return captures;
+  };
 
+  const getKingPossibleCaptures = (from: [number, number], board: number[][], piece: number) => {
+    const directions = [
+      [1, 1], [1, -1], [-1, 1], [-1, -1]
+    ];
+    const captures = [];
+  
+    for (const [dx, dy] of directions) {
+      let step = 1;
+      while (true) {
+        const to: [number, number] = [from[0] + dx * step, from[1] + dy * step];
+        if (to[0] < 0 || to[0] >= 8 || to[1] < 0 || to[1] >= 8) break;
+
+        if (board[to[0]][to[1]] !== 0) break;
+
+        const midX = from[0] + dx * (step / 2);
+        const midY = from[1] + dy * (step / 2);
+  
+        if (board[midX][midY] * piece < 0) {
+          captures.push(to);
+        }
+
+        step++;
+      }
+    }
+  
     return captures;
   };
 
@@ -122,19 +157,19 @@ const Game: React.FC<GameProps> = ({ player }) => {
     const dy = ty - fy;
 
     if (Math.abs(piece) === 1) {
-      if (piece === 1 && dx !== -1) {
+      if (piece === 1 && dx !== -1 && Math.abs(dx) !== 2) {
         console.log('Invalid move: player 1 can only move forwards');
         return false; // Player 1 moves forwards
       }
-      if (piece === -1 && dx !== 1) {
+      if (piece === -1 && dx !== 1 && Math.abs(dx) !== 2) {
         console.log('Invalid move: player 2 can only move forwards');
         return false; // Player 2 moves forwards
       }
 
-      if (Math.abs(dy) === 1) {
+      if (Math.abs(dy) === 1 && Math.abs(dx) === 1) {
         return true; // Simple move
       }
-      if (Math.abs(dy) === 2 && board[(fx + tx) / 2][(fy + ty) / 2] * piece < 0) {
+      if (Math.abs(dy) === 2 && Math.abs(dx) === 2 && board[(fx + tx) / 2][(fy + ty) / 2] * piece < 0) {
         return true; // Capture move
       }
     }
@@ -184,7 +219,7 @@ const Game: React.FC<GameProps> = ({ player }) => {
         }
       }
   
-      const moreCaptures = getPossibleCaptures(to, newBoard, piece);
+      const moreCaptures = piece === 2 || piece === -2 ? getKingPossibleCaptures(to, newBoard, piece) : getPossibleCaptures(to, newBoard, piece);
   
       if (capturedCount > 0 && moreCaptures.length > 0) {
         console.log('More captures possible, continuing turn');
@@ -202,7 +237,6 @@ const Game: React.FC<GameProps> = ({ player }) => {
       ws.send(JSON.stringify({ type: 'move', from, to, board: newBoard, player: playerNumber, turn: turn === 1 ? 2 : 1, captured: capturedCount > 0, capturedColor, capturedCount, id: localStorage.getItem('playerId') }));
     }
   };
-  
 
   const handleSelect = (x: number, y: number) => {
     if (playerNumber !== turn) {
@@ -219,6 +253,8 @@ const Game: React.FC<GameProps> = ({ player }) => {
       if (board[x][y] * (color ?? 0) > 0) {
         setSelected([x, y]);
         console.log('Piece selected:', [x, y]);
+        const captures = board[x][y] === 2 || board[x][y] === -2 ? getKingPossibleCaptures([x, y], board, board[x][y]) : getPossibleCaptures([x, y], board, board[x][y]);
+        setPossibleCaptures(captures);
       }
     }
   };
@@ -236,7 +272,7 @@ const Game: React.FC<GameProps> = ({ player }) => {
         <p>Turno do Jogador {turn}</p>
         <p>Peças capturadas - Vermelho: {capturedPieces.red}, Azul: {capturedPieces.blue}</p>
       </div>
-      <Board board={board} selected={selected} onSelect={handleSelect} />
+      <Board board={board} selected={selected} onSelect={handleSelect} possibleCaptures={possibleCaptures} />
     </div>
   );
 };

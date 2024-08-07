@@ -1,74 +1,103 @@
-const WebSocket = require('ws');
-const express = require('express');
-const http = require('http');
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+import WebSocket, { WebSocketServer } from 'ws';
+import http from 'http';
+import { trace } from '@opentelemetry/api';
+import Game from './game.js'; // Importar o módulo de jogo
+import { initializeTracing } from './tracing.js';
+import express from 'express';
 
-let waitingPlayer = null;
-let activeGame = null;
+// Função principal para encapsular a lógica assíncrona
+async function main() {
+    // Inicializar o tracing
+    await initializeTracing();
 
-const startGame = (player1, player2) => {
-  const colors = Math.random() > 0.5 ? [1, -1] : [-1, 1]; // Sorteia as cores
-  activeGame = { player1: { ...player1, color: colors[0] }, player2: { ...player2, color: colors[1] } };
-  player1.ws.send(JSON.stringify({ type: 'start', player: 1, color: colors[0] }));
-  player2.ws.send(JSON.stringify({ type: 'start', player: 2, color: colors[1] }));
-};
+    const app = express();
+    const server = http.createServer(app);
+    const wss = new WebSocketServer({ server });
 
-const handleDisconnect = (ws) => {
-  if (activeGame) {
-    if (activeGame.player1.ws === ws || activeGame.player2.ws === ws) {
-      const opponent = activeGame.player1.ws === ws ? activeGame.player2 : activeGame.player1;
-      opponent.ws.send(JSON.stringify({ type: 'end', message: 'Opponent disconnected. You win!' }));
-      activeGame = null;
-      waitingPlayer = null;
-    }
-  } else if (waitingPlayer && waitingPlayer.ws === ws) {
-    waitingPlayer = null;
-  }
-};
+    let waitingPlayer = null;
+    let activeGames = [];
 
-wss.on('connection', (ws) => {
-  console.log('New client connected');
+    wss.on('connection', (ws) => {
+        const tracer = trace.getTracer('checkers-game');
+        const connectionSpan = tracer.startSpan('ws.connection');
+        connectionSpan.addEvent('New client connected');
+        connectionSpan.end();
 
-  ws.on('message', (message) => {
-    console.log('Received message:', message);
-    const data = JSON.parse(message);
+        ws.on('message', (message) => {
+            const messageSpan = tracer.startSpan('ws.message');
+            messageSpan.addEvent('Received message', { message });
 
-    switch (data.type) {
-      case 'join':
-        console.log('Player joined:', data);
-        if (waitingPlayer === null) {
-          waitingPlayer = { id: data.id, ws, player: data.player };
-          console.log('Waiting for another player...');
-        } else {
-          const player1 = waitingPlayer;
-          const player2 = { id: data.id, ws, player: data.player };
-          waitingPlayer = null;
+            let data;
+            try {
+                data = JSON.parse(message);
+            } catch (error) {
+                console.error('Invalid message format', error);
+                messageSpan.setAttribute('error', true);
+                messageSpan.end();
+                return;
+            }
 
-          console.log('Starting game: Player 1:', player1, 'Player 2:', player2);
-          startGame(player1, player2);
-        }
-        break;
-      case 'move':
-        console.log('Player move:', data);
-        if (activeGame) {
-          activeGame.player1.ws.send(JSON.stringify(data));
-          activeGame.player2.ws.send(JSON.stringify(data));
-        }
-        break;
-      default:
-        console.log('Unknown message type:', data.type);
-        break;
-    }
-  });
+            console.log('Received message type:', data.type);
 
-  ws.on('close', () => {
-    console.log('Client disconnected');
-    handleDisconnect(ws);
-  });
-});
+            switch (data.type) {
+                case 'join':
+                    const joinSpan = tracer.startSpan('ws.join', {
+                        parent: messageSpan
+                    });
+                    console.log('Player joined:', data);
+                    if (waitingPlayer === null) {
+                        waitingPlayer = { id: data.id, ws, player: data.player };
+                        console.log('Waiting for another player...');
+                    } else {
+                        const player1 = waitingPlayer;
+                        const player2 = { id: data.id, ws, player: data.player };
+                        waitingPlayer = null;
 
-server.listen(8080, () => {
-  console.log('Server is listening on port 8080');
+                        const newGame = new Game(player1, player2);
+                        activeGames.push(newGame);
+                        console.log('Starting game: Player 1:', player1, 'Player 2:', player2);
+                        newGame.start();
+                    }
+                    joinSpan.end();
+                    break;
+                case 'move':
+                    const moveSpan = tracer.startSpan('ws.move', {
+                        parent: messageSpan
+                    });
+                    console.log('Player move:', data);
+                    const game = activeGames.find(g => g.player1.ws === ws || g.player2.ws === ws);
+                    if (game) {
+                        game.broadcast(data);
+                    }
+                    moveSpan.end();
+                    break;
+                default:
+                    console.log('Unknown message type:', data.type);
+                    break;
+            }
+            messageSpan.end();
+        });
+
+        ws.on('close', () => {
+            const closeSpan = tracer.startSpan('ws.close');
+            closeSpan.addEvent('Client disconnected');
+            const gameIndex = activeGames.findIndex(g => g.player1.ws === ws || g.player2.ws === ws);
+            if (gameIndex !== -1) {
+                const game = activeGames[gameIndex];
+                game.handleDisconnect(ws);
+                activeGames.splice(gameIndex, 1);
+            } else if (waitingPlayer && waitingPlayer.ws === ws) {
+                waitingPlayer = null;
+            }
+            closeSpan.end();
+        });
+    });
+
+    const address = await server.listen({ port: 8080, host: '0.0.0.0' });
+    console.log(`Server is running on ${address}`);
+}
+
+main().catch(err => {
+    console.error('Error starting the application', err);
+    process.exit(1);
 });
